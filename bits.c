@@ -123,7 +123,9 @@ extern int printf(const char *, ...);
  *   Rating: 1
  */
 long bitMatch(long x, long y) {
-    return 2L;
+    // x & y | ~x & ~ y
+    // ~ (~(x & y) & ~(~x & ~y))
+    return ~(~(x & y) & ~(~x & ~y));
 }
 /*
  * implication - given input x and y, which are binary
@@ -152,7 +154,9 @@ long bitMatch(long x, long y) {
  *   Rating: 2
  */
 long implication(long x, long y) {
-    return 2L;
+    // !(x ^ y) | !x & y
+    // !(x ^ y) | !x
+    return !(x ^ y) | !x;
 }
 /*
  * leastBitPos - return a mask that marks the position of the
@@ -163,7 +167,8 @@ long implication(long x, long y) {
  *   Rating: 2
  */
 long leastBitPos(long x) {
-    return 2;
+    // x & -x (2's complement)
+    return x & (~x + 1);
 }
 /*
  * oddBits - return word with all odd-numbered bits set to 1
@@ -172,7 +177,13 @@ long leastBitPos(long x) {
  *   Rating: 2
  */
 long oddBits(void) {
-    return 2;
+    // byte = 0x10101010
+    // word = 0x1010101010101010
+    long byte = 0xAAL;
+    long word = (byte << 8) | byte;
+    word = (word << 16) | word;
+    word = (word << 32) | word;
+    return word;
 }
 /*
  * replaceByte(x,n,c) - Replace byte n in x with c
@@ -184,7 +195,10 @@ long oddBits(void) {
  *   Rating: 3
  */
 long replaceByte(long x, long n, long c) {
-    return 2;
+    long shift_bits = n << 3;
+    long mask = 0xFFL << shift_bits;
+    long shifted_c = c << shift_bits;
+    return (x & ~mask) | shifted_c;
 }
 /*
  * conditional - same as x ? y : z
@@ -194,7 +208,10 @@ long replaceByte(long x, long n, long c) {
  *   Rating: 3
  */
 long conditional(long x, long y, long z) {
-    return 2L;
+    // x == 0 -> mask = 0xFFFFFFFFFFFFFFFFL
+    // x != 0 -> mask = 0x0000000000000000L
+    long mask = ~(!x) + 1;
+    return (~mask & y) | (mask & z);
 }
 /*
  * logicalShift - shift x to the right by n, using a logical shift
@@ -205,7 +222,10 @@ long conditional(long x, long y, long z) {
  *   Rating: 3
  */
 long logicalShift(long x, long n) {
-    return 2L;
+    long ans = x >> n;
+    long shift = 64 + (~n + 1L);  // 64 - n
+    long mask = (1L << shift) + (~0L);
+    return conditional(n, ans & mask, x);
 }
 /*
  * leftBitCount - returns count of number of consective 1's in
@@ -216,7 +236,47 @@ long logicalShift(long x, long n) {
  *   Rating: 4
  */
 long leftBitCount(long x) {
-    return 2L;
+    // Count number of leading 1's from the most significant bit
+    long cnt = 0;
+    long mask = ~0L;
+
+    mask = mask << 32;
+    long temp = x & mask;
+    long shift = !(temp ^ mask) << 5;
+    cnt += shift;
+    x = x << shift;
+
+    mask = mask << 16;
+    temp = x & mask;
+    shift = !(temp ^ mask) << 4;
+    cnt += shift;
+    x = x << shift;
+
+    mask = mask << 8;
+    temp = x & mask;
+    shift = !(temp ^ mask) << 3;
+    cnt += shift;
+    x = x << shift;
+
+    mask = mask << 4;
+    temp = x & mask;
+    shift = !(temp ^ mask) << 2;
+    cnt += shift;
+    x = x << shift;
+
+    mask = mask << 2;
+    temp = x & mask;
+    shift = !(temp ^ mask) << 1;
+    cnt += shift;
+    x = x << shift;
+
+    mask = mask << 1;
+    temp = x & mask;
+    shift = !(temp ^ mask);
+    cnt += shift;
+    x = x << shift;
+
+    return cnt + ((x >> 63) & 1);
 }
 /*
  * bitParity - returns 1 if x contains an odd number of 0's
@@ -226,7 +286,16 @@ long leftBitCount(long x) {
  *   Rating: 4
  */
 long bitParity(long x) {
-    return 2L;
+    // use xor to count if number of 0s are odd
+    
+    x = x ^ logicalShift(x, 32L);
+    x = x ^ logicalShift(x, 16L);
+    x = x ^ logicalShift(x, 8L);
+    x = x ^ logicalShift(x, 4L);
+    x = x ^ logicalShift(x, 2L);
+    x = x ^ logicalShift(x, 1L);
+
+    return x & 1L;
 }
 /*
  * dividePower2 - Compute x/(2^n), for 0 <= n <= 62
@@ -237,7 +306,12 @@ long bitParity(long x) {
  *   Rating: 2
  */
 long dividePower2(long x, long n) {
-    return 2L;
+    // if (remainder && negative) x >> n + 1
+    // else x >> n
+    // =======> return x >> n + (remainder && negative)
+    long remainder_mask = (1L << n) + ~0L;
+    long signed_bit_mask = 1L << 63;
+    return (x >> n) + (!!(x & remainder_mask) & !!(x & signed_bit_mask));
 }
 /*
  * isGreater - if x > y  then return 1, else return 0
@@ -247,7 +321,26 @@ long dividePower2(long x, long n) {
  *   Rating: 3
  */
 long isGreater(long x, long y) {
-    return 2L;
+    // x - y > 0 ---> return 1
+    // z = x + (-y) > 0 ---> return 1
+    // z == 0 ---> return 0
+    // or z's signed bit is 0 ---> return 1
+    // otherwise ---> return 0;
+
+    // to handle x - y overflow
+    // x is negative && y is positive -> return 0
+    // x is positive && y is negative -> return 1
+
+    long sign_mask = (1L << 63);
+    long x_sign = x & sign_mask;
+    long y_sign = y & sign_mask;
+    long x_neg_and_y_pos = (!!x_sign) & (!y_sign);
+    long x_pos_and_y_neg = (!x_sign) & (!!y_sign);
+    long result = x + (~y + 1L);
+    return conditional(x_neg_and_y_pos, 0, 
+            conditional(x_pos_and_y_neg, 1,
+                conditional(result, !(result & (1L << 63)), 0)
+            ));
 }
 /*
  * trueFiveEighths - multiplies by 5/8 rounding toward 0,
@@ -261,5 +354,12 @@ long isGreater(long x, long y) {
  *  Rating: 4
  */
 long trueFiveEighths(long x) {
-    return 2L;
+    // process negative x with its two's complement
+    // however, the when x equals to -2^63, its two's complement is still negative. Use logical shift in second step.
+    long positive_x = conditional(isGreater(x, 0L), x, ((~x) + 1L));
+    long one_out_of_eight_of_x = logicalShift(positive_x, 3);
+    long remainder_divide_by_eight = positive_x & 0x7L;
+    long remainder_times_five = (remainder_divide_by_eight << 2) + remainder_divide_by_eight;
+    long positive_answer = (remainder_times_five >> 3) + (one_out_of_eight_of_x << 2) + one_out_of_eight_of_x;
+    return conditional(isGreater(x, 0L), positive_answer, ~positive_answer + 1L);
 }
