@@ -223,9 +223,11 @@ long conditional(long x, long y, long z) {
  */
 long logicalShift(long x, long n) {
     long ans = x >> n;
-    long shift = 64 + (~n + 1L);  // 64 - n
+    long shift = 64 + (~n + 1L); // 64 - n
     long mask = (1L << shift) + (~0L);
-    return conditional(n, ans & mask, x);
+
+    long conditional_mask = ~(!n) + 1;
+    return (~conditional_mask & ans & mask) | (conditional_mask & x);
 }
 /*
  * leftBitCount - returns count of number of consective 1's in
@@ -287,13 +289,13 @@ long leftBitCount(long x) {
  */
 long bitParity(long x) {
     // use xor to count if number of 0s are odd
-    
-    x = x ^ logicalShift(x, 32L);
-    x = x ^ logicalShift(x, 16L);
-    x = x ^ logicalShift(x, 8L);
-    x = x ^ logicalShift(x, 4L);
-    x = x ^ logicalShift(x, 2L);
-    x = x ^ logicalShift(x, 1L);
+
+    x = x ^ (x >> 32);
+    x = x ^ (x >> 16);
+    x = x ^ (x >> 8);
+    x = x ^ (x >> 4);
+    x = x ^ (x >> 2);
+    x = x ^ (x >> 1);
 
     return x & 1L;
 }
@@ -321,26 +323,20 @@ long dividePower2(long x, long n) {
  *   Rating: 3
  */
 long isGreater(long x, long y) {
-    // x - y > 0 ---> return 1
-    // z = x + (-y) > 0 ---> return 1
-    // z == 0 ---> return 0
-    // or z's signed bit is 0 ---> return 1
-    // otherwise ---> return 0;
+    // y - x >= 0 --> return 0
+    // z = y + (-x + 1) >= 0 --> return 0
+    // z's sign bit
 
     // to handle x - y overflow
-    // x is negative && y is positive -> return 0
-    // x is positive && y is negative -> return 1
+    // x is negative && y is positive -> return 0 = y's sign
+    // x is positive && y is negative -> return 1 = y's sign
 
-    long sign_mask = (1L << 63);
-    long x_sign = x & sign_mask;
-    long y_sign = y & sign_mask;
-    long x_neg_and_y_pos = (!!x_sign) & (!y_sign);
-    long x_pos_and_y_neg = (!x_sign) & (!!y_sign);
-    long result = x + (~y + 1L);
-    return conditional(x_neg_and_y_pos, 0, 
-            conditional(x_pos_and_y_neg, 1,
-                conditional(result, !(result & (1L << 63)), 0)
-            ));
+    long x_sign = (x >> 63) & 1L;
+    long y_sign = (y >> 63) & 1L;
+    long overflow = x_sign ^ y_sign;
+    long z = y + (~x + 1L);
+    long z_sign = (z >> 63) & 1L;
+    return (overflow & y_sign) | ((!overflow) & z_sign);
 }
 /*
  * trueFiveEighths - multiplies by 5/8 rounding toward 0,
@@ -354,12 +350,10 @@ long isGreater(long x, long y) {
  *  Rating: 4
  */
 long trueFiveEighths(long x) {
-    // process negative x with its two's complement
-    // however, the when x equals to -2^63, its two's complement is still negative. Use logical shift in second step.
-    long positive_x = conditional(isGreater(x, 0L), x, ((~x) + 1L));
-    long one_out_of_eight_of_x = logicalShift(positive_x, 3);
-    long remainder_divide_by_eight = positive_x & 0x7L;
-    long remainder_times_five = (remainder_divide_by_eight << 2) + remainder_divide_by_eight;
-    long positive_answer = (remainder_times_five >> 3) + (one_out_of_eight_of_x << 2) + one_out_of_eight_of_x;
-    return conditional(isGreater(x, 0L), positive_answer, ~positive_answer + 1L);
+    long quotient = x >> 3;
+    long remainder = x & 7L;
+    long bias =
+        (x >> 63) & 7L; // to avoid negative division round to negative infinite
+    long adjusted = (remainder << 2) + remainder + bias;
+    return (quotient << 2) + quotient + (adjusted >> 3);
 }

@@ -10,7 +10,8 @@ SHELL = /bin/bash
 CC = /usr/bin/gcc
 CFLAGS = -std=gnu99 -m64 -O1 -fwrapv -g -Werror -Wall -Wextra \
 	 -Wstrict-prototypes -Wwrite-strings \
-	 -Wno-unused-parameter -Wno-cast-function-type -Wno-bool-operation
+	 -Wno-unused-parameter -Wno-cast-function-type -Wno-bool-operation \
+	 -Wno-unused-variable
 LDLIBS = -lm
 
 # Path to LLVM binaries when running on autograder and shark cluster
